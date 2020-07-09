@@ -90,8 +90,9 @@ then
     cp -arp "${CONFIG_DIRECTORY}/files" "${OPENWRT_ROOT}/files"
     infoText "Creating Full Config and Final Checks" ${INFO_TEXT_MISC}
     make defconfig
-    make menuconfig
 fi
+#Always give the option to make last minute changes
+make menuconfig
 if [ "${_arg_clean}" = "on" ]
 then
     infoText "Cleaning Build directories" ${INFO_TEXT_MISC}

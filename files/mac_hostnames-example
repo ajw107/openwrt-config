@@ -1,0 +1,20 @@
+config host
+    option mac BA:09:87:65:43:21
+    option name MyPhone
+
+config host
+    option mac AA:11:BB:22:CC:33
+    option name YourPhone
+
+config host
+    option mac DD:44:EE:55:FF:66
+    option name MyPC
+
+config host
+    option mac 12:34:56:78:90:AB
+    option name OpenWRT-Living
+
+config host
+    option mac AA:BB:CC:DD:EE:FF
+    option name OpenWRT-Bedroom
+

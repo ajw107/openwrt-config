@@ -1,0 +1,26 @@
+--- feeds/packages/utils/nano/Makefile	2020-07-08 21:00:55.150643125 +0100
++++ altered-nano-makefile	2020-06-25 17:29:35.000000000 +0100
+@@ -31,7 +31,7 @@
+   CATEGORY:=Utilities
+   TITLE:=An enhanced clone of the Pico text editor
+   URL:=https://www.nano-editor.org/
+-  DEPENDS:=+libncurses
++  DEPENDS:=+libncurses +zlib +libmagic
+ endef
+ 
+ define Package/nano/description
+@@ -40,10 +40,10 @@
+ endef
+ 
+ CONFIGURE_ARGS += \
+-	--enable-tiny \
+-	--disable-utf8 \
+-	--without-slang \
+-	--disable-color \
++#	--enable-tiny \
++#	--disable-utf8 \
++#	--without-slang \
++#	--disable-color \
+ 
+ CONFIGURE_VARS += \
+ 	ac_cv_header_regex_h=no \

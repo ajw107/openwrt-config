@@ -1,5 +1,11 @@
-#!/usr/bin/env bash
+#!/opt/bin/env bash
+#required dependencies can be installed with:
+# /opt/bin/opkg update
+# /opt/bin/opkg install core-utils coreutils-stat grep dnsmasq bash nano procps-ng-ps
 PROCESSES_TO_KILL=( "udhcpd" "/usr/sbin/dnsmasq" )
+LOG_FOLDER="/mnt/sda1/logs/dnsmasq"
+LOG_USER="guest"
+LOG_GROUP="guest"
 OPTBIN="/opt/bin"
 OPTSBIN="/opt/sbin"
 GREP="${OPTBIN}/grep"
@@ -10,9 +16,32 @@ SEQ="${OPTBIN}/seq"
 BASENAME="${OPTBIN}/basename"
 PS="${OPTBIN}/ps"
 ECHO="${OPTBIN}/echo"
+MKDIR="${OPTBIN}/mkdir"
+RM="${OPTBIN}/rm"
+CHOWN="${OPTBIN}/chown"
+STAT="${OPTBIN}/stat"
 DNSMASQ_ORIG=""
 
-#alias psgrep='ps | grep -v "grep" | "${GREP}" -i'
+#alias psgrep='ps aux | grep -v "grep" | "${GREP}" -i'
+
+#make the log folder if it doesn't exist
+if [ ! -e "${LOG_FOLDER}" ]
+then
+    "${MKDIR}" -p "${LOG_FOLDER}"
+    "${CHOWN}" "${LOG_USER}":"${LOG_GROUP}" -R "${LOG_FOLDER}"
+elif [ ! -d "${LOG_FOLDER}" ]
+then
+    #somethings there, and not a directory, remove it
+    "${RM}" -rf "${LOG_FOLDER}"
+    "${MKDIR}" -p "${LOG_FOLDER}"
+    "${CHOWN}" -R "${LOG_USER}":"${LOG_GROUP}" "${LOG_FOLDER}"
+fi
+
+#make sure it's owned by the right user/group
+if [ "$("${STAT}" --format '%U' "${LOG_FOLDER}")" != "${LOG_USER}" ] || [ "$("${STAT}" --format '%G' "${LOG_FOLDER}")" != "${LOG_GROUP}" ]
+then
+    "${CHOWN}" "${LOG_USER}":"${LOG_GROUP}" -R "${LOG_FOLDER}"
+fi
 
 wait=15
 "${ECHO}" -n "Waiting for all services to start, say ${wait}s..."
@@ -22,11 +51,12 @@ do
     "${SLEEP}" ${inc}s
     "${ECHO}" -n "$((wait-(i*inc)))s.."
 done
+
 "${ECHO}" ""
 for process in ${PROCESSES_TO_KILL[@]}
 do
     processName="$("${BASENAME}" "${process}")"
-    if (( $("${PS}" | "${GREP}" -v "grep" | "${GREP}" -i -c "${process}") > 0 ))
+    if (( $("${PS}" aux | "${GREP}" -v "grep" | "${GREP}" -i -c "${process}") > 0 ))
     then
         "${ECHO}" "Killing ${processName}..."
         "${KILLALL}" "${processName}"
@@ -34,7 +64,7 @@ do
         if (( ${retVal} > 0 ))
         then
             "${ECHO}" "Process ${processName} exists, but was not killed (return value [${retVal}]"
-            "${PS}" | "${GREP}" -v "grep" | "${GREP}" -i "${process}"
+            "${PS}" aux | "${GREP}" -v "grep" | "${GREP}" -i "${process}"
         else
             wait=5
             "${ECHO}" -n "Waiting for processs to stop, say ${wait}s..."
@@ -45,10 +75,10 @@ do
                 "${ECHO}" -n "$((wait-(i*inc)))s.."
             done
             "${ECHO}" ""
-            if (( $("${PS}" | "${GREP}" -v "grep" | "${GREP}" -i -c "${process}") > 0 ))
+            if (( $("${PS}" aux | "${GREP}" -v "grep" | "${GREP}" -i -c "${process}") > 0 ))
             then
-                "${ECHO}" "Process ${processName} exists, but was not killed ([$("${PS}" | "${GREP}" -v "grep" | "${GREP}" -i -c "${process}")] processes still exist)"
-                "${PS}" | "${GREP}" -v "grep" | "${GREP}" -i "${process}"
+                "${ECHO}" "Process ${processName} exists, but was not killed ([$("${PS}" aux | "${GREP}" -v "grep" | "${GREP}" -i -c "${process}")] processes still exist)"
+                "${PS}" aux | "${GREP}" -v "grep" | "${GREP}" -i "${process}"
             else
                 "${ECHO}" "Process ${processName} was killed successfully"
             fi
@@ -67,7 +97,7 @@ do
     "${ECHO}" -n "$((wait-(i*inc)))s.."
 done
 "${ECHO}" ""
-if (( $("${PS}" | "${GREP}" -v "grep" | "${GREP}" -i -c ""${DNSMASQ_FULL}"") > 0 ))
+if (( $("${PS}" aux | "${GREP}" -v "grep" | "${GREP}" -i -c "${DNSMASQ_FULL}") > 0 ))
 then
     "${ECHO}" "DNSMasq is already running, please either kill it with 'killall dnsmasq'"
     "${ECHO}" "or ignore this if you're okay with the version that is running"
@@ -77,6 +107,6 @@ else
 fi
 
 "${ECHO}" "DNS Processes:"
-"${PS}" | "${GREP}" -v "grep" | "${GREP}" -i dns
+"${PS}" aux | "${GREP}" -v "grep" | "${GREP}" -i dns
 "${ECHO}" "DHCP Processes:"
-"${PS}" | "${GREP}" -v "grep" | "${GREP}" -i dhcp
+"${PS}" aux | "${GREP}" -v "grep" | "${GREP}" -i dhcp

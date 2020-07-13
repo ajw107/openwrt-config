@@ -1,64 +1,82 @@
 #!/usr/bin/env bash
 PROCESSES_TO_KILL=( "udhcpd" "/usr/sbin/dnsmasq" )
-#alias psgrep='ps | grep -v "grep" | /opt/bin/grep -i'
+OPTBIN="/opt/bin"
+OPTSBIN="/opt/sbin"
+GREP="${OPTBIN}/grep"
+DNSMASQ_FULL="${OPTSBIN}/dnsmasq"
+KILLALL="${OPTBIN}/killall"
+SLEEP="${OPTBIN}/sleep"
+SEQ="${OPTBIN}/seq"
+BASENAME="${OPTBIN}/basename"
+PS="${OPTBIN}/ps"
+ECHO="${OPTBIN}/echo"
+DNSMASQ_ORIG=""
+
+#alias psgrep='ps | grep -v "grep" | "${GREP}" -i'
 
 wait=15
-echo -n "Waiting for all services to start, say ${wait}s..."
+"${ECHO}" -n "Waiting for all services to start, say ${wait}s..."
 inc=2
-for i in $(seq 1 $((wait/inc)))
+for i in $("${SEQ}" 1 $((wait/inc)))
 do
-    sleep ${inc}s
-    echo -n "$((wait-(i*inc)))s.."
+    "${SLEEP}" ${inc}s
+    "${ECHO}" -n "$((wait-(i*inc)))s.."
 done
-echo ""
+"${ECHO}" ""
 for process in ${PROCESSES_TO_KILL[@]}
 do
-    if (( $(ps | /opt/bin/grep -v "grep" | /opt/bin/grep -i -c "${process}") > 0 ))
+    processName="$("${BASENAME}" "${process}")"
+    if (( $("${PS}" | "${GREP}" -v "grep" | "${GREP}" -i -c "${process}") > 0 ))
     then
-        processName="$(basename "${process}")"
-        echo "Killing ${processName}..."
-        /opt/bin/killall "${processName}"
+        "${ECHO}" "Killing ${processName}..."
+        "${KILLALL}" "${processName}"
         retVal=$?
         if (( ${retVal} > 0 ))
         then
-            echo "Process ${processName} exists, but was not killed (return value [${retVal}]"
-            ps | /opt/bin/grep -v "grep" | /opt/bin/grep -i "${process}"
+            "${ECHO}" "Process ${processName} exists, but was not killed (return value [${retVal}]"
+            "${PS}" | "${GREP}" -v "grep" | "${GREP}" -i "${process}"
         else
             wait=5
-            echo -n "Waiting for processs to stop, say ${wait}s..."
+            "${ECHO}" -n "Waiting for processs to stop, say ${wait}s..."
             inc=1
-            for i in $(seq 1 $((wait/inc)))
+            for i in $("${SEQ}" 1 $((wait/inc)))
             do
-                sleep ${inc}s
-                echo -n "$((wait-(i*inc)))s.."
+                "${SLEEP}" ${inc}s
+                "${ECHO}" -n "$((wait-(i*inc)))s.."
             done
-            echo ""
-            if (( $(ps | /opt/bin/grep -v "grep" | /opt/bin/grep -i -c "${process}") > 0 ))
+            "${ECHO}" ""
+            if (( $("${PS}" | "${GREP}" -v "grep" | "${GREP}" -i -c "${process}") > 0 ))
             then
-                echo "Process ${processName} exists, but was not killed ([$(ps | /opt/bin/grep -v "grep" | /opt/bin/grep -i -c "${process}")] processes still exist)"
-                ps | /opt/bin/grep -v "grep" | /opt/bin/grep -i "${process}"
+                "${ECHO}" "Process ${processName} exists, but was not killed ([$("${PS}" | "${GREP}" -v "grep" | "${GREP}" -i -c "${process}")] processes still exist)"
+                "${PS}" | "${GREP}" -v "grep" | "${GREP}" -i "${process}"
             else
-                echo "Process ${processName} was killed successfully"
+                "${ECHO}" "Process ${processName} was killed successfully"
             fi
         fi
     else
-        echo "Process ${processName} doesn't exist, so no need to kill it"
+        "${ECHO}" "Process ${processName} doesn't exist, so no need to kill it"
     fi
 done
 
 wait=5
-echo -n "Giving things chance to shutdown ${wait}s..."
+"${ECHO}" -n "Giving things chance to shutdown ${wait}s..."
 inc=1
-for i in $(seq 1 $((wait/inc)))
+for i in $("${SEQ}" 1 $((wait/inc)))
 do
-    sleep ${inc}s
-    echo -n "$((wait-(i*inc)))s.."
+    "${SLEEP}" ${inc}s
+    "${ECHO}" -n "$((wait-(i*inc)))s.."
 done
-echo ""
-echo "Starting full DNSMasq..."
-/opt/sbin/dnsmasq --except-interface=lo -r /tmp/resolv.conf
+"${ECHO}" ""
+if (( $("${PS}" | "${GREP}" -v "grep" | "${GREP}" -i -c ""${DNSMASQ_FULL}"") > 0 ))
+then
+    "${ECHO}" "DNSMasq is already running, please either kill it with 'killall dnsmasq'"
+    "${ECHO}" "or ignore this if you're okay with the version that is running"
+else
+    "${ECHO}" "Starting full DNSMasq..."
+    "${DNSMASQ_FULL}" --except-interface=lo -r /tmp/resolv.conf
+fi
 
-echo "DNS Processes:"
-ps | /opt/bin/grep -v "grep" | /opt/bin/grep -i dns
-echo "DHCP Processes:"
-ps | /opt/bin/grep -v "grep" | /opt/bin/grep -i dhcp
+"${ECHO}" "DNS Processes:"
+"${PS}" | "${GREP}" -v "grep" | "${GREP}" -i dns
+"${ECHO}" "DHCP Processes:"
+"${PS}" | "${GREP}" -v "grep" | "${GREP}" -i dhcp

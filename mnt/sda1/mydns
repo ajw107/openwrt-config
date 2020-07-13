@@ -3,6 +3,10 @@
 # /opt/bin/opkg update
 # /opt/bin/opkg install core-utils coreutils-stat grep dnsmasq bash nano procps-ng-ps
 PROCESSES_TO_KILL=( "udhcpd" "/usr/sbin/dnsmasq" )
+WAIT_FOR_SERVICES_TO_START=20
+WAIT_FOR_SERVICES_TO_START_INCREMENT=2
+WAIT_FOR_SERVICE_TO_STOP=5
+WAIT_FOR_SERVICE_TO_STOP_INCREMENT=1
 LOG_FOLDER="/mnt/sda1/logs/dnsmasq"
 LOG_USER="guest"
 LOG_GROUP="guest"
@@ -28,24 +32,24 @@ DNSMASQ_ORIG=""
 if [ ! -e "${LOG_FOLDER}" ]
 then
     "${MKDIR}" -p "${LOG_FOLDER}"
-    "${CHOWN}" "${LOG_USER}":"${LOG_GROUP}" -R "${LOG_FOLDER}"
+    "${CHOWN}" "${LOG_USER}:${LOG_GROUP}" -R "${LOG_FOLDER}"
 elif [ ! -d "${LOG_FOLDER}" ]
 then
     #somethings there, and not a directory, remove it
     "${RM}" -rf "${LOG_FOLDER}"
     "${MKDIR}" -p "${LOG_FOLDER}"
-    "${CHOWN}" -R "${LOG_USER}":"${LOG_GROUP}" "${LOG_FOLDER}"
+    "${CHOWN}" -R "${LOG_USER}:${LOG_GROUP}" "${LOG_FOLDER}"
 fi
 
 #make sure it's owned by the right user/group
 if [ "$("${STAT}" --format '%U' "${LOG_FOLDER}")" != "${LOG_USER}" ] || [ "$("${STAT}" --format '%G' "${LOG_FOLDER}")" != "${LOG_GROUP}" ]
 then
-    "${CHOWN}" "${LOG_USER}":"${LOG_GROUP}" -R "${LOG_FOLDER}"
+    "${CHOWN}" "${LOG_USER}:${LOG_GROUP}" -R "${LOG_FOLDER}"
 fi
 
-wait=15
+wait=${WAIT_FOR_SERVICES_TO_START}
 "${ECHO}" -n "Waiting for all services to start, say ${wait}s..."
-inc=2
+inc=${WAIT_FOR_SERVICES_TO_START_INCREMENT}
 for i in $("${SEQ}" 1 $((wait/inc)))
 do
     "${SLEEP}" ${inc}s
@@ -66,9 +70,9 @@ do
             "${ECHO}" "Process ${processName} exists, but was not killed (return value [${retVal}]"
             "${PS}" aux | "${GREP}" -v "grep" | "${GREP}" -i "${process}"
         else
-            wait=5
+            wait=${WAIT_FOR_SERVICE_TO_STOP}
             "${ECHO}" -n "Waiting for processs to stop, say ${wait}s..."
-            inc=1
+            inc=${WAIT_FOR_SERVICE_TO_STOP_INCREMENT}
             for i in $("${SEQ}" 1 $((wait/inc)))
             do
                 "${SLEEP}" ${inc}s
@@ -88,9 +92,9 @@ do
     fi
 done
 
-wait=5
+wait=${WAIT_FOR_SERVICE_TO_STOP}
 "${ECHO}" -n "Giving things chance to shutdown ${wait}s..."
-inc=1
+inc=${WAIT_FOR_SERVICE_TO_STOP_INCREMENT}
 for i in $("${SEQ}" 1 $((wait/inc)))
 do
     "${SLEEP}" ${inc}s

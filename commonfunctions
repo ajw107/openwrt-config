@@ -30,7 +30,7 @@ set -u
 
 ######Initialise Variables
 #grab sensitive values
-secretsFile="${HOME}/secrets/$(basename "${BASH_SOURCE}")_secrets"
+secretsFile="${PWD}/$(basename "${BASH_SOURCE}")_secrets"
 if $(sudo test -e "${secretsFile}")
 then
     echo "Loading ${secretsFile}..."

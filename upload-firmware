@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-. "${HOME}/bin/commonfunctions"
+. "${PWD}/commonfunctions"
 
 declare -r BEDROOM_AP_IP="192.168.32.3"
 declare -r LIVING_AP_IP="192.168.32.4"

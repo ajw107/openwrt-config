@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-. "${HOME}/bin/commonfunctions"
+. "${PWD}/commonfunctions"
 
 declare -r PROG_NAME="xpr3-build-script"
 declare -r PROG_VER="1.0"

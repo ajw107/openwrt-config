@@ -15,9 +15,9 @@ export TERMINFO=/opt/share/terminfo
 export TERM=xterm-256color
 #vt100
 alias ll='ls -al'
-alias pgrep='ps | grep -i'
+alias psgrep='ps | grep -i'
 
-echo -e "echo Setting up system variables\nexport PATH=/opt/bin:/opt/sbin:/opt/usr/bin:/opt/usr/sbin:${PATH}\nexport TERM=xterm-256color\nalias ll='ls -al'\nalias pgrep='ps | grep -i'" | \
+echo -e "echo Setting up system variables\nexport PATH=/opt/bin:/opt/sbin:/opt/usr/bin:/opt/usr/sbin:${PATH}\nexport TERM=xterm-256color\nalias ll='ls -al'\nalias psgrep='ps | grep -i'" | \
     tee -a /etc/profile
 
 echo Setting up Entware

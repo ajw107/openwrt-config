@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+PROCESSES_TO_KILL=( "udhcpd" "/usr/sbin/dnsmasq" )
+#alias psgrep='ps | grep -v "grep" | /opt/bin/grep -i'
+
+wait=15
+echo -n "Waiting for all services to start, say ${wait}s..."
+inc=2
+for i in $(seq 1 $((wait/inc)))
+do
+    sleep ${inc}s
+    echo -n "$((wait-(i*inc)))s.."
+done
+echo ""
+for process in ${PROCESSES_TO_KILL[@]}
+do
+    if (( $(ps | /opt/bin/grep -v "grep" | /opt/bin/grep -i -c "${process}") > 0 ))
+    then
+        processName="$(basename "${process}")"
+        echo "Killing ${processName}..."
+        /opt/bin/killall "${processName}"
+        retVal=$?
+        if (( ${retVal} > 0 ))
+        then
+            echo "Process ${processName} exists, but was not killed (return value [${retVal}]"
+            ps | /opt/bin/grep -v "grep" | /opt/bin/grep -i "${process}"
+        else
+            wait=5
+            echo -n "Waiting for processs to stop, say ${wait}s..."
+            inc=1
+            for i in $(seq 1 $((wait/inc)))
+            do
+                sleep ${inc}s
+                echo -n "$((wait-(i*inc)))s.."
+            done
+            echo ""
+            if (( $(ps | /opt/bin/grep -v "grep" | /opt/bin/grep -i -c "${process}") > 0 ))
+            then
+                echo "Process ${processName} exists, but was not killed ([$(ps | /opt/bin/grep -v "grep" | /opt/bin/grep -i -c "${process}")] processes still exist)"
+                ps | /opt/bin/grep -v "grep" | /opt/bin/grep -i "${process}"
+            else
+                echo "Process ${processName} was killed successfully"
+            fi
+        fi
+    else
+        echo "Process ${processName} doesn't exist, so no need to kill it"
+    fi
+done
+
+wait=5
+echo -n "Giving things chance to shutdown ${wait}s..."
+inc=1
+for i in $(seq 1 $((wait/inc)))
+do
+    sleep ${inc}s
+    echo -n "$((wait-(i*inc)))s.."
+done
+echo ""
+echo "Starting full DNSMasq..."
+/opt/sbin/dnsmasq --except-interface=lo -r /tmp/resolv.conf
+
+echo "DNS Processes:"
+ps | /opt/bin/grep -v "grep" | /opt/bin/grep -i dns
+echo "DHCP Processes:"
+ps | /opt/bin/grep -v "grep" | /opt/bin/grep -i dhcp

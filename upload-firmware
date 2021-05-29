@@ -2,8 +2,8 @@
 
 . "${PWD}/commonfunctions"
 
-declare -r BEDROOM_AP_IP="192.168.32.3"
-declare -r LIVING_AP_IP="192.168.32.4"
+declare -r BEDROOM_AP_IP="192.168.16.3"
+declare -r LIVING_AP_IP="192.168.16.4"
 declare -r FIRMWARE_LOCATION="${HOME}/git/openwrt/bin/targets/ramips/mt7621"
 declare -r KNOWN_HOSTS_FILE="${HOME}/.ssh/known_hosts"
 declare -r FIRMWARE_MATCH_PATTERN="*sysupgrade.bin"

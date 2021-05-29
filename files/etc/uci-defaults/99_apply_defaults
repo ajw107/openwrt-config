@@ -138,8 +138,26 @@ setup_wifi_iface()
     uci set wireless.@wifi-iface[-1].hidden="${5:=0}"
     #allow fast ap switching on devices that support it (mainly apple)
     uci set wireless.@wifi-iface[-1].ieee80211r='1'
+    ##and enable better roaming, maybe?
+    uci set wireless.@wifi-iface[-1].ieee80211v='1'
+    uci set wireless.@wifi-iface[-1].ieee80211k='1'
+#for some reason say it is an unrecognised option (openwrt 21.02.0-rc1), leaving it commented as do need it for dawn and roaming on supported
+#    uci set wireless.@wifi-iface[-1].bss_transition='1'
+    uci set wireless.@wifi-iface[-1].ft_over_ds='1'
+    uci set wireless.@wifi-iface[-1].ft_psk_generate_local='1'
+    uci rename wireless.@wifi-iface[-1]="wifinet${1#radio}"
     echo "Setup Wifi on ${1} with SSID ${3} using bridge ${2}"
 #    echo "Setup Wifi on ${1} with SSID ${3} with passphrase [${4}] using bridge ${2}"
+}
+
+setup_umdns()
+{
+    uci_remove_array "umdns" "=umdns$"
+    uci -q add umdns umdns >/dev/null
+    uci set umdns.@umdns[-1].jail='1'
+    uci add_list umdns.@umdns[-1].network='lan'
+    uci add_list umdns.@umdns[-1].network='wan'
+    uci commit umdns
 }
 
 # $1 name of item to delete from uci
@@ -158,7 +176,8 @@ uci_remove_single_item()
 }
 
 # $1 array item to delete from uci
-# $2 test string to use to determine if items are deleted
+# $2 test string to use to determine if items are deleted (usually just =<name of array>$)
+#    which can be =umdns$ for all items in umdns.umdns[i] or frogs in all items in tardis.frogs[i]
 # Does not alter ucitrack, which informas LuCi of what config files do what
 uci_remove_array()
 {
@@ -509,7 +528,7 @@ disable_DHCP()
 setup_final()
 {
     echo "Final setup..."
-    #echo "192.168.32.22 dashboard.alex-wood.org.uk controller.alex-wood.org.uk radius.alex-wood.org.uk topology.alex-wood.org.uk" | tee -a /etc/hosts
+    #echo "192.168.16.22 dashboard.alex-wood.org.uk controller.alex-wood.org.uk radius.alex-wood.org.uk topology.alex-wood.org.uk" | tee -a /etc/hosts
 
     sed -i '10a\export TERM=xterm-color' "/etc/profile"
 
@@ -521,7 +540,7 @@ setup_final()
     # shellcheck disable=SC2086
     opkg --force-overwrite install ${APPS_TO_INSTALL}
 
-    echo "Adding nice hostnames make all the mac addresses in LuCi easier to understand..."
+    echo "Adding descriptive hostnames make all the mac addresses in LuCi easier to understand..."
     cat /mac_hostnames >> /etc/config/dhcp
 
     echo "Syncing and restarting network (will take a few seconds)..."
@@ -547,6 +566,7 @@ fi
 
 setup_LAN
 setup_wifi
+setup_umdns
 setup_luci
 setup_dropbear
 setup_watchcat

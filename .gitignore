@@ -1,3 +1,6 @@
 files/mac_hostnames
 files/secrets
 files/etc/dropbear/authorized_keys
+gitTag
+config.buildinfo
+

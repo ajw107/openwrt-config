@@ -1,6 +1,0 @@
-logDir=/mnt/sda1/logs/dnsmasq
-#from https://github.com/viviparous/dnsmasq_logrotate
-/opt/bin/find "${logDir}" -type f -exec /opt/bin/unzip -p "{}" \; | /opt/bin/grep -i googlevideo | \
-    /opt/bin/awk '{print $6}' | /opt/bin/sort | /opt/bin/uniq -c | /opt/bin/sort -n
-
-

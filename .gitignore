@@ -3,4 +3,6 @@ files/secrets
 files/etc/dropbear/authorized_keys
 gitTag
 config.buildinfo
+mnt/sda1/mydns
+opt/etc/dnsmasq.conf
 

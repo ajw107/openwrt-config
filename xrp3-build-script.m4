@@ -103,6 +103,7 @@ then
 elif [ "${_arg_update}" = "on" ]
 then
     infoText "Updating from remote Git Repo" ${INFO_TEXT_MISC}
+    git checkout master
     git pull
 fi
 if [ "${_arg_clean}" = "on" ]

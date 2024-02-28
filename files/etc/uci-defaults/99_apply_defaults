@@ -1,7 +1,20 @@
 #!/usr/bin/env ash
 # shellcheck shell=dash disable=2140,2169
+
+PROG_VER="1.2"
+#2021-08-02 1.1 -   Why are we installing stuff before the network is even up, if any packages are to be installed do it
+#                   via .config at compile time, and not here
+#               -   Move channels into secrets file (much easier to debug then, rather than switching between two files)
+#               -   Add preliminary support for AX3000 device (although wireless interfaces are not created properly)
+#               -   Move PROG_VER above the changelog for easier and more obious editing
+#               -   Don't delete original wireless config, just rename it
+#               -   The path of the wifi device must now be entered in the secrets file, same order as channels
+#               -   Indented the output to make it more readable
+#2024-02-28 1.2 -   Removed Dropbear config, as using openssh now to relieve headaches
+#                   NOTE: /etc/dropbear/authorized_keys no longer required /root/.ssh/authorized_keys used instead
+
 #If compiling your own image place:
-# authorized_keys file of public keys in: <directory where git repo was cloned>/files/etc/dropbear/authorized_keys
+# authorized_keys file of public keys in: <directory where git repo was cloned>/files/root/.ssh/authorized_keys
 # this file in <directory where git repo was cloned>/files/etc/uci-defaults/99_apply_defaults 
 # secret file of sensitive variables referenced below in <directory where git repo was cloned>/files/secrets
 #  In the format SECRET_<VAR NAME>="<VALUE>" per line
@@ -40,7 +53,6 @@ TRUE="1"
 FALSE="0"
 CHANNELS=""
 PROG_DESC="OpenWRT multiple Wireless Access Points automated setup version"
-PROG_VER="1.0"
 AUTHOR_NAME="Alex Wood"
 AUTHOR_EMAIL="alex@alex-wood.org.uk"
 
@@ -55,32 +67,45 @@ ROUTER_IP="${SECRET_ROUTER_IP}"
 BEDROOM_AP_MAC="${SECRET_BEDROOM_AP_MAC}"
 BEDROOM_AP_HOSTNAME="${SECRET_BEDROOM_AP_HOSTNAME}"
 BEDROOM_AP_IP_END="${SECRET_BEDROOM_AP_IP_END}"
+BEDROOM_AP_CHANNELS="${SECRET_BEDROOM_AP_CHANNELS}"
+BEDROOM_AP_PATHS="${SECRET_BEDROOM_AP_PATHS}"
 LIVING_ROOM_AP_MAC="${SECRET_LIVING_ROOM_AP_MAC}"
 LIVING_ROOM_AP_HOSTNAME="${SECRET_LIVING_ROOM_AP_HOSTNAME}"
 LIVING_ROOM_AP_IP_END="${SECRET_LIVING_ROOM_AP_IP_END}"
+LIVING_ROOM_AP_CHANNELS="${SECRET_LIVING_ROOM_AP_CHANNELS}"
+LIVING_ROOM_AP_PATHS="${SECRET_LIVING_ROOM_AP_PATHS}"
+AX_AP_MAC="${SECRET_AX_AP_MAC}"
+AX_AP_HOSTNAME="${SECRET_AX_AP_HOSTNAME}"
+AX_AP_IP_END="${SECRET_AX_AP_IP_END}"
+AX_AP_CHANNELS="${SECRET_AX_AP_CHANNELS}"
+AX_AP_PATHS="${SECRET_AX_AP_PATHS}"
 COUNTRY_CODE="GB"
-BEDROOM_AP_CHANNELS="4 149"
-LIVING_ROOM_AP_CHANNELS="9 157"
 SSID="${SECRET_SSID}"
 WIFI_PASSPHRASE="${SECRET_WIFI_PASSPHRASE}"
 WEBUI_ROOT_PASSWORD="${SECRET_WEBUI_ROOT_PASSWORD}"
-APPS_TO_INSTALL="less logger more"
+APPS_TO_INSTALL="" #less logger more"
 ## **** IMPORTANT: SEE NOTES IN LEDS SECTION ~ LINE 510 ****
 SETUP_LEDS="${TRUE}"
+INDENT="-\t"
 
 ##FUNCTIONS
 #$1 name of service
 disable_service()
 {
-    "/etc/init.d/${1}" stop 2> /dev/null
-    "/etc/init.d/${1}" disable
-    echo "${1} service disabled"
+    if [ -e "/etc/init.d/${1}" ]
+    then
+        "/etc/init.d/${1}" stop 2> /dev/null
+        "/etc/init.d/${1}" disable
+        echo -e "${INDENT}${1} service disabled"
+    fi
 }
 
 # $1 Channel to set the Wifi to
 setup_wifi_device()
 {
     local WIFI_CHANNEL="${1}"
+    local WIFI_PATH="${2}"
+    echo -e "${INDENT}Setting up wifi device at path ${WIFI_PATH} on channel ${WIFI_CHANNEL}"
 #    uci set wireless.radio${COUNTER}="wifi-device"
 #    uci set wireless.radio${COUNTER}.type='mac80211'
     #don;t have any old non-n/ac devices in the network
@@ -99,19 +124,19 @@ setup_wifi_device()
     then
         #2.4GHz radio
         uci set "wireless.radio${COUNTER}.hwmode"='11g'
-        uci set "wireless.radio${COUNTER}.path"='pci0000:00/0000:00:00.0/0000:01:00.0'
+        uci set "wireless.radio${COUNTER}.path"="${WIFI_PATH}"
         uci set "wireless.radio${COUNTER}.htmode"='HT40'
         uci set "wireless.radio${COUNTER}.distance"='20'
         uci set "wireless.radio${COUNTER}.beacon_int"='500'
-        echo "Setup 2.4GHz on radio${COUNTER} using channel ${WIFI_CHANNEL}"
+        echo -e "${INDENT}Setup 2.4GHz on radio${COUNTER} at path ${WIFI_PATH} using channel ${WIFI_CHANNEL}"
     else
         #5GHz radio
         uci set "wireless.radio$COUNTER.hwmode"='11a'
-        uci set "wireless.radio$COUNTER.path"='pci0000:00/0000:00:01.0/0000:02:00.0'
+        uci set "wireless.radio$COUNTER.path"="${WIFI_PATH}"
         uci set "wireless.radio$COUNTER.htmode"='VHT80'
         uci set "wireless.radio$COUNTER.distance"='100'
         uci set "wireless.radio$COUNTER.beacon_int"='100'
-        echo "Setup 5GHz on radio${COUNTER} using channel ${WIFI_CHANNEL}"
+        echo -e "${INDENT}Setup 5GHz on radio${COUNTER} at path ${WIFI_PATH} using channel ${WIFI_CHANNEL}"
     fi
     #temporarily disable radios until fully set up and encryption enabled
     uci set "wireless.radio$COUNTER.disabled"='1'
@@ -124,6 +149,12 @@ setup_wifi_device()
 # $5 1 to hide the SSID, 0 to broadcase it (default)
 setup_wifi_iface()
 {
+    if [ "${5}" == "0" ]
+    then
+        echo -e "${INDENT}Setting up radio ${1} on network/bridge ${2} with an SSID of ${3} with a password and SSID is NOT hidden"
+    else
+        echo -e "${INDENT}Setting up radio ${1} on network/bridge ${2} with an SSID of ${3} with a password and SSID IS hidden"
+    fi
     uci -q add wireless wifi-iface >/dev/null
     uci set wireless.@wifi-iface[-1].device="${1}"
     uci set wireless.@wifi-iface[-1].mode='ap'
@@ -146,18 +177,20 @@ setup_wifi_iface()
     uci set wireless.@wifi-iface[-1].ft_over_ds='1'
     uci set wireless.@wifi-iface[-1].ft_psk_generate_local='1'
     uci rename wireless.@wifi-iface[-1]="wifinet${1#radio}"
-    echo "Setup Wifi on ${1} with SSID ${3} using bridge ${2}"
-#    echo "Setup Wifi on ${1} with SSID ${3} with passphrase [${4}] using bridge ${2}"
+    echo -e "${INDENT}Setup Wifi on ${1} with SSID ${3} using bridge ${2}"
+#    echo -e "Setup Wifi on ${1} with SSID ${3} with passphrase [${4}] using bridge ${2}"
 }
 
 setup_umdns()
 {
+    echo -e "Setting up umdns"
     uci_remove_array "umdns" "=umdns$"
     uci -q add umdns umdns >/dev/null
     uci set umdns.@umdns[-1].jail='1'
     uci add_list umdns.@umdns[-1].network='lan'
     uci add_list umdns.@umdns[-1].network='wan'
     uci commit umdns
+    echo -e "umdns setup complete"
 }
 
 # $1 name of item to delete from uci
@@ -166,13 +199,15 @@ uci_remove_single_item()
 {
     local item_to_remove="${1}"
     #for some reason things don't always get deleted, so here's a hack (just keep on trying until it's gone)
+    INDENT="-\t\t\t"
     while [ "$(uci -q show "${item_to_remove}" | wc -l)" -gt 0 ]
     do
         uci -q del "${item_to_remove}"
-        echo "Deleting ${item_to_remove}, $(uci -q show "${item_to_remove}" | wc -l) left"
+        echo -e "${INDENT}Deleting ${item_to_remove}, $(uci -q show "${item_to_remove}" | wc -l) left"
     done
+    INDENT="-\t\t"
     uci commit "${item_to_remove%%.*}"
-    echo "${item_to_remove} deleted"
+    echo -e "${INDENT}${item_to_remove} deleted"
 }
 
 # $1 array item to delete from uci
@@ -185,48 +220,54 @@ uci_remove_array()
     local test_string="${2}"
     # for ((i=0 ; i<5 ; i++)) dash doesn;t do c style for loops, grrr
     #for some reason the delete command doesn't always work, so here's a hack (just keep on deleting until there are none left)
+    INDENT="-\t\t\t"
     while [ "$(uci -q show "${item_to_delete}" | grep -v "^ucitrack." | grep -c "${test_string}")" -gt 0 ]
     do
         uci -q show "${item_to_delete}" | grep "${test_string}" | grep -v "^ucitrack." | awk -F '=' '{ print $1 }' | while read -r ITEM
         do
-            echo "Deleting ${ITEM}, $(uci -q show "${item_to_delete}" | grep -v "^ucitrack." | grep -c "${test_string}") left"
+            echo -e "${INDENT}Deleting ${ITEM}, $(uci -q show "${item_to_delete}" | grep -v "^ucitrack." | grep -c "${test_string}") left"
             uci -q delete "${ITEM}"
             #uci -q delete ntpclient.@ntpclient[-1]
         done
         uci commit "${item_to_delete%%.*}"
     done
-    echo "${item_to_delete} has been deleted"
+    INDENT="-\t\t"
+    echo -e "${INDENT}${item_to_delete} has been deleted"
 }
 
 disable_normal_services()
 {
-    echo "Disabling Normal Services..."
+    echo -e "Disabling Normal Services..."
     #disable currently unneeded services (which don't need specific code to disable them)
     for SERVICE in ${NORMAL_SERVICES_TO_DISABLE}
     do
         disable_service "${SERVICE}"
     done
-    echo "Normal services disabled"
+    echo -e "Normal services disabled"
 }
 
 setup_NTP()
 {
-    echo "Setting up NTP and Chrony"
+    echo -e "Setting up NTP and Chrony"
     ##Setup NTP and Chrony
-    uci_remove_single_item "system.ntp.server"
 
+    echo -e "${INDENT}NTP setup..."
+    INDENT="-\t\t"
+    uci_remove_single_item "system.ntp.server"
     uci set system.@system[0].timezone="${TIMEZONE_DST_INFO}"
     uci set system.@system[0].zonename="${TIMEZONE}"
     #uci set system.ntp="timeserver"
     for SERVER in ${NTP_SERVERS}
     do
         uci -q add_list system.ntp.server="${SERVER}"
-        echo "Added ${SERVER} to ntp"
+        echo -e "${INDENT}Added ${SERVER} to ntp"
     done
     uci set system.ntp.enable_server='1'
     uci commit system
 
-    echo "NTP client setup..."
+    INDENT="-\t"
+    echo -e "${INDENT}NTP client setup..."
+    INDENT="-\t\t"
     #make sure no other ntp configs are set
     uci_remove_array "ntpclient" "=ntpserver$"
     uci_remove_array "ntpclient" "=ntpclient$"
@@ -237,7 +278,7 @@ setup_NTP()
         uci -q add ntpclient ntpserver >/dev/null
     #    uci set ntpclient.@ntpserver[-1]="ntpserver"
         uci set ntpclient.@ntpserver[-1].hostname="${SERVER}"
-        echo "Added ${SERVER} to ntpclient"
+        echo -e "${INDENT}Added ${SERVER} to ntpclient"
         uci set ntpclient.@ntpserver[-1].port='123'
     done
 
@@ -249,7 +290,10 @@ setup_NTP()
     uci set ntpclient.@ntpdrift[-1].freq='0'
     uci commit ntpclient
 
-    echo "Chrony setup..."
+    INDENT="-\t"
+    echo -e "Chrony setup..."
+    INDENT="-\t\t"
+
     uci_remove_array "chrony" "=pool$"
     uci_remove_array "chrony" "=dhcp_ntp_server$"
     uci_remove_array "chrony" "=makestep$"
@@ -264,7 +308,7 @@ setup_NTP()
         uci -q add chrony pool >/dev/null
     #    uci set chrony.@pool[-1]=pool
         uci set chrony.@pool[-1].hostname="${SERVER}"
-        echo "Added ${SERVER} to Chrony"
+        echo -e "${INDENT}Added ${SERVER} to Chrony"
         uci set chrony.@pool[-1].maxpoll='12'
         uci set chrony.@pool[-1].iburst='yes'
     done
@@ -277,12 +321,13 @@ setup_NTP()
     #uci set chrony.@allow[-1]=allow
     uci set chrony.@allow[-1].interface='lan'
     uci commit chrony
-    echo "NTP and Chrony setup complete"
+    INDENT="-\t"
+    echo -e "NTP and Chrony setup complete"
 }
 
 setup_LEDs()
 {
-    echo "Setting up LEDs..."
+    echo -e "Setting up LEDs..."
     #Setup LEDS
     #make sure no other LED configs are set
     uci_remove_array "system" "=led$"
@@ -344,20 +389,41 @@ setup_LEDs()
     uci set system.@led[-1].default='0'
     uci set system.@led[-1].trigger='phy1assoc'
     uci commit system
-    echo "$(uci -q show system | grep -c "=led$") LED configs created"
-    echo "LEDs setup"
+    echo -e "${INDENT}$(uci -q show system | grep -c "=led$") LED configs created"
+    echo -e "LEDs setup complete"
 }
 
 setup_LAN()
 {
-    echo "Setting up LAN..."
+    echo -e "Setting up LAN..."
     #Set up lan ports
     uci set network.lan.type='bridge'
     #add the wan port to the lan ports, as we'll be using it as a lan port
     #(configured below, as if we delete it first, we can't grab it from uci here)
+#    if [ "$(uci -q get network.lan.ifname)" == "" ]
+#    then
+        local numberOfLANinterfaces=$(ip addr | cut -d ' ' -f 2 | cut -d@ -f1 | grep -v wlan | grep -v br-lan | grep -v lo | grep -v eth0 | grep -v wan | grep -cve "^$")
+        local interfaces=""
+        echo -e "${INDENT}Bridge not set up, adding lan interfaces"
+        for interface in $(seq 1 ${numberOfLANinterfaces})
+        do
+            if [ "${interfaces}" == "" ]
+            then
+                interfaces="lan${interface}"
+            else
+                interfaces="${interfaces} lan${interface}"
+            fi
+            echo -e "${INDENT}\tAdded lan${inferface}..."
+        done
+    uci set network.lan.ifname="${interfaces}"
+#    fi
     if [ "$(uci -q get network.wan.ifname)" != "" ]
     then
         uci set network.lan.ifname="$(uci get network.lan.ifname) $(uci get network.wan.ifname)"
+        echo -e "${INDENT}Bridge setup with interfaces $(uci get network.lan.ifname) - [$(uci get network.wan.ifname)] was added"
+    else
+        uci set network.lan.ifname="$(uci get network.lan.ifname) wan"
+        echo -e "${INDENT}WAN interface not found during bridge setup, assuming default of wan"
     fi
 
     uci set network.lan.proto='static'
@@ -387,34 +453,62 @@ setup_LAN()
 
     uci_remove_single_item "network.wan6"
 
+    uci commit network
+
+    echo -e "LAN ports setup complete"
+}
+
+setup_specifics()
+{
     #Setup router specific stuff using the mac on each router to identify it
     #or could do: cat /sys/class/net/eth0/address NOTE:will return it in lower case
     case "$(ifconfig eth0 | awk '/^[a-z]/ { print $NF; exit; }')" in
       "${BEDROOM_AP_MAC}")
+        echo -e "${INDENT}Using specific config for Bedroom AP"
         uci set network.lan.ipaddr="${ROUTER_IP%.*}.${BEDROOM_AP_IP_END}"
         uci set network.lan.hostname="${BEDROOM_AP_HOSTNAME}"
         uci commit network
         uci set system.@system[0].hostname="${BEDROOM_AP_HOSTNAME}"
         uci commit system
         CHANNELS="${BEDROOM_AP_CHANNELS}"
+        PATHS="${BEDROOM_AP_PATHS}"
         ;;
       "${LIVING_ROOM_AP_MAC}")
+        echo -e "${INDENT}Using specific config for Living Room AP"
         uci set network.lan.ipaddr="${ROUTER_IP%.*}.${LIVING_ROOM_AP_IP_END}"
         uci set network.lan.hostname="${LIVING_ROOM_AP_HOSTNAME}"
         uci commit network
         uci set system.@system[0].hostname="${LIVING_ROOM_AP_HOSTNAME}"
         uci commit system
         CHANNELS="${LIVING_ROOM_AP_CHANNELS}"
+        PATHS="${LIVING_ROOM_AP_PATHS}"
+        ;;
+      "${AX_AP_MAC}")
+        echo -e "${INDENT}Using specific config for AX AP"
+        uci set network.lan.ipaddr="${ROUTER_IP%.*}.${AX_AP_IP_END}"
+        uci set network.lan.hostname="${AX_AP_HOSTNAME}"
+        uci commit network
+        uci set system.@system[0].hostname="${AX_AP_HOSTNAME}"
+        uci commit system
+        CHANNELS="${AX_AP_CHANNELS}"
+        PATHS="${AX_AP_PATHS}"
+        ;;
+        *)
+        echo -e "ERROR: Unknown mac address [$(ifconfig eth0 | awk '/^[a-z]/ { print $NF; exit; }')] knwon values are:"
+        echo -e "      Bedroom AP:     [${BEDROOM_AP_MAC}]"
+        echo -e "      Living Room AP: [${LIVING_ROOM_AP_MAC}]"
+        echo -e "      AX AP:          [${AX_AP_MAC}]"
         ;;
     esac
-    echo "LAN ports setup complete"
 }
 
 setup_wifi()
 {
-    echo "Setting up wireless..."
+    echo -e "Setting up wireless..."
     # Wipe out any previous wifi settings
-    echo '' >|"/etc/config/wireless"
+    #echo '' >|"/etc/config/wireless"
+    mv "/etc/config/wireless" "/etc/config/wireless.orig"
+    echo -e "${INDENT}Generating default wifi config.."
     wifi config
     uci commit wireless
 
@@ -423,7 +517,19 @@ setup_wifi()
     #above we set the channels in the specific order of the physical radiosn, this is important here
     for CHANNEL in ${CHANNELS}
     do
-        setup_wifi_device "${CHANNEL}"
+        PATH_COUNTER=0
+        DEVICE_PATH=""
+        for WIFI_DEVICE_PATH in ${PATHS}
+        do
+            if [ ${PATH_COUNTER} -eq ${COUNTER} ]
+            then
+                    DEVICE_PATH="${WIFI_DEVICE_PATH}"
+                    break
+            fi
+            _=$((PATH_COUNTER=PATH_COUNTER+1))
+        done
+        echo -e "${INDENT}Setting up wifi device number ${COUNTER} at path ${DEVICE_PATH} on channel ${CHANNEL}"
+        setup_wifi_device "${CHANNEL}" "${DEVICE_PATH}"
         _=$((COUNTER=COUNTER+1))
     done
     uci commit wireless
@@ -433,6 +539,7 @@ setup_wifi()
 
     uci -q show wireless | grep "\.radio.=" | awk -F '.' '{ print $2}' | awk -F '=' '{ print $1 }' | while read -r RADIO
     do
+    echo -e "${INDENT}Setting up Wireless interface on radio ${RADIO}"
     #   setup_wifi_iface "$RADIO"	NETWORK	SSID			PASSWORD		        HIDDEN
         setup_wifi_iface "$RADIO"	"lan"	"${SSID}"       "${WIFI_PASSPHRASE}"    "0"
     #   setup_wifi_iface "$RADIO"	"guest"	"guest-ssid"	"guest-passphrase"	    "0"
@@ -440,25 +547,25 @@ setup_wifi()
         uci set "wireless.$RADIO.disabled"="0"
     done
     uci commit wireless
-    echo "Wireless Setup Complete"
+    echo -e "Wireless Setup Complete"
 }
 
 setup_luci()
 {
-    echo "Setting up LUCI..."
+    echo -e "Setting up LUCI..."
     #Set up luci's langugage, will probably be english by default, but never mind
     uci set luci.languages.en='English'
     uci set luci.main.lang='en'
     uci set luci.flash_keep.passwd='/etc/passwd'
-    uci set luci.flash_keep.dropbear='/etc/dropbear/'
+    # 1.2# uci set luci.flash_keep.dropbear='/etc/dropbear/'
     uci set luci.flash_keep.uci='/etc/config/'
     uci commit luci
-    echo "LUCI setup complete"
+    echo -e "LUCI setup complete"
 }
 
 setup_dropbear()
 {
-    echo "Setting up Dropbear..."
+    echo -e "Setting up Dropbear..."
     #Setup ssh to only use ssh keys (place authorized_keys file containing a list of public key in /etc/dropbear/authorized_keys
     #unless mcompiling your own, then follow instruction at top of this file
     uci_remove_array "dropbear" "=dropbear$"
@@ -469,36 +576,40 @@ setup_dropbear()
     uci set dropbear.@dropbear[-1].Port='22'
     uci set dropbear.@dropbear[-1].PasswordAuth='off'
     uci commit dropbear
-    echo "Dropbear setup complete"
+    echo -e "Dropbear setup complete"
 }
 
 setup_watchcat()
 {
-    echo "Setting up WatchCat..."
+    echo -e "Setting up WatchCat..."
 
     #remove default config
+    #DON'T THINK THIS WORKING FO SOME REASON
     uci_remove_array "system" "=watchcat$"
 
     #if there's no internet (ping google.com) for 5m, reboot
     uci -q add system watchcat >/dev/null
-    uci set system.@watchcat[-1].mode='ping'
+    uci set system.@watchcat[-1].mode='ping_reboot'
     uci set system.@watchcat[-1].period='5m'
     uci set system.@watchcat[-1].forcedelay='30'
     uci set system.@watchcat[-1].pinghosts='8.8.8.8'
+    uci set system.@watchcat[-1].pingperiod='30s'
+    uci set system.@watchcat[-1].pingsize='standard'
+    uci set system.@watchcat[-1].interface='br-lan'
 
     #every 12 hours reboot (for some reason, after a while wifi is still active, but devices can't use internet)
     uci -q add system watchcat >/dev/null
-    uci set system.@watchcat[-1].mode='allways'
+    uci set system.@watchcat[-1].mode='periodic_reboot'
     uci set system.@watchcat[-1].period='12h'
     uci set system.@watchcat[-1].forcedelay='0'
 
     uci commit system
-    echo "WatchCat setup complete"
+    echo -e "WatchCat setup complete"
 }
 
 disable_DHCP()
 {
-    echo "Removing DHCP..."
+    echo -e "Removing DHCP..."
     #Turn off DHCP, as the main router will do this for us
     uci_remove_array "dhcp.odhcpd" "=odhcpd$"
 
@@ -522,36 +633,36 @@ disable_DHCP()
     do
         disable_service "${SERVICE}"
     done
-    echo "DHCP disabled"
+    echo -e "DHCP disabled"
 }
 
 setup_final()
 {
-    echo "Final setup..."
-    #echo "192.168.16.22 dashboard.alex-wood.org.uk controller.alex-wood.org.uk radius.alex-wood.org.uk topology.alex-wood.org.uk" | tee -a /etc/hosts
+    echo -e "Final setup..."
+    #echo -e "192.168.16.22 dashboard.alex-wood.org.uk controller.alex-wood.org.uk radius.alex-wood.org.uk topology.alex-wood.org.uk" | tee -a /etc/hosts
 
     sed -i '10a\export TERM=xterm-color' "/etc/profile"
 
-    echo "Setting webui root Password..."
+    echo -e "${INDENT}Setting webui root Password..."
     lua /usr/bin/set_password.lua root "${WEBUI_ROOT_PASSWORD}" &>/dev/null
 
-    echo "Installing Packages..."
-    opkg update &>/dev/null
-    # shellcheck disable=SC2086
-    opkg --force-overwrite install ${APPS_TO_INSTALL}
+#    echo -e "Installing Packages..."
+#    opkg update &>/dev/null
+#    # shellcheck disable=SC2086
+#    opkg --force-overwrite install ${APPS_TO_INSTALL}
 
-    echo "Adding descriptive hostnames make all the mac addresses in LuCi easier to understand..."
+    echo -e "${INDENT}Adding descriptive hostnames make all the mac addresses in LuCi easier to understand..."
     cat /mac_hostnames >> /etc/config/dhcp
 
-    echo "Syncing and restarting network (will take a few seconds)..."
+    echo -e "${INDENT}Syncing and restarting network (will take a few seconds)..."
     sync
     /etc/init.d/network restart
-    echo "Setup Complete"
+    echo -e "Setup Complete"
 }
-echo "Functions and Variables loaded"
+echo -e "Functions and Variables loaded"
 
 ##MAIN CODE
-echo "Main Program START: ${PROG_DESC} version ${PROG_VER} by ${AUTHOR_NAME} (${AUTHOR_EMAIL})"
+echo -e "Main Program START: ${PROG_DESC} version ${PROG_VER} by ${AUTHOR_NAME} (${AUTHOR_EMAIL})"
 disable_normal_services
 setup_NTP
 
@@ -564,13 +675,15 @@ then
     setup_LEDs
 fi
 
-setup_LAN
-setup_wifi
+#ALWAYS do lan before wifi, as it figures out the right channels, etc for the device
+#setup_LAN #using /etc/config/network file (cop-out, I know)
+setup_specifics
+#setup_wifi #using /etc/config/wireless file (another cop-out)
 setup_umdns
 setup_luci
-setup_dropbear
+#1.2 #setup_dropbear
 setup_watchcat
 disable_DHCP
 setup_final
 
-echo "Main Program END: ${PROG_DESC} version ${PROG_VER} by ${AUTHOR_NAME} (${AUTHOR_EMAIL})"
+echo -e "Main Program END: ${PROG_DESC} version ${PROG_VER} by ${AUTHOR_NAME} (${AUTHOR_EMAIL})"

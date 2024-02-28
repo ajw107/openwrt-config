@@ -1,6 +1,7 @@
 files/mac_hostnames
 files/secrets
 files/etc/dropbear/authorized_keys
+files/root/.ssh/authorized_keys
 gitTag
 config.buildinfo
 mnt/

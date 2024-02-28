@@ -14,7 +14,7 @@ declare -r AUTHOR_EMAIL="alex@alex-wood.org.uk"
 # m4_ignore(
 echo "This is just a script template, not the script (yet) - pass it to 'argbash' to fix this." >&2
 exit 11  #)Created by argbash-init v2.8.1
-# ARG_OPTIONAL_BOOLEAN([clean],[c],[Cleans old build files before building to make sure old files don't halt the build process.  As a result build time is substantially long (the toolchain, linux, utils, everything is rebuilt],[on])
+# ARG_OPTIONAL_BOOLEAN([clean],[c],[Cleans old build files before building to make sure old files don't halt the build process.  As a result build time is substantially longer (the toolchain, linux, utils, everything is rebuilt],[on])
 # ARG_OPTIONAL_BOOLEAN([renew_config],[r],[Replace any current configuration (.config) with the default one.  WARNING: This will undo any changes you have made using make menuconfig.],[on])
 # ARG_OPTIONAL_BOOLEAN([stable],[s],[Shows a menu allowing you to choose a STABLE version of OpenWRT to use (i.e. not the bleeding edge, and possibly not working, latest git version.  WARNING: This will have to turn on clean and update.],[off])
 # ARG_OPTIONAL_BOOLEAN([update],[u],[Update the git repo (for OpenWRT and DAWN) and update and install the feeds.  Nano is also repatched and DAWN is relinked.  WARNING: As this bring the code up to date with the 'bleeding 'edge' of OpenWRT some builds may fail until a fix has been commited to the OpenWRT/Feeds/DAWN repos],[on])
@@ -83,6 +83,7 @@ OPENWRT_ROOT="${GIT_ROOT}/openwrt"
 DAWN_ROOT="${GIT_ROOT}/DAWN"
 DAWN_FEED_LINK="${OPENWRT_ROOT}/feeds/packages/net/dawn/git-src"
 CONFIG_DIRECTORY="${PWD}"
+BUILD_LOG_FILE="${OPENWRT_ROOT}/build.log"
 
 if [[ "${_arg_stable}" = "on" && ( "${_arg_update}" = "off" || "${_arg_clean}" = "off" ) ]]
 then
@@ -94,7 +95,11 @@ fi
 pushd "${OPENWRT_ROOT}"
 
 infoText "Build System Prerequisites/Dependancies" ${INFO_TEXT_INSTALL}
-sudo apt install -y subversion g++ zlib1g-dev build-essential git python python3 python3-distutils libncurses5-dev gawk gettext unzip file libssl-dev wget libelf-dev ecj fastjar java-propose-classpath intltool util-linux asciidoc binutils 
+sudo apt install -y subversion g++ zlib1g-dev build-essential git bash python3 python3-distutils libncurses-dev gawk gettext unzip \
+                    file libssl-dev wget libelf-dev ecj fastjar java-propose-classpath intltool util-linux asciidoc binutils bzip2 \
+                    flex gcc time gzip help2man make patch perl-modules libthread-queue-any-perl xsltproc  \
+                    libboost-dev libxml-parser-perl libusb-dev bin86 bcc sharutils gcc-multilib b43-fwcutter zip clang bison \
+                    g++-multilib rsync
 
 if [ "${_arg_stable}" = "on" ]
 then
@@ -115,8 +120,8 @@ if [ "${_arg_update}" = "on" ]
 then
     infoText "Updating Feeds" ${INFO_TEXT_MISC}
     "${OPENWRT_ROOT}/scripts/feeds" update -a
-    infoText "Patch to Nano" ${INFO_TEXT_APPLY}
-    patch --verbose --unified --input "${CONFIG_DIRECTORY}/nano-tiny-to-full.patch" "${OPENWRT_ROOT}/feeds/packages/utils/nano/Makefile"
+#    infoText "Patch to Nano" ${INFO_TEXT_APPLY}
+#    patch --verbose --unified --input "${CONFIG_DIRECTORY}/nano-tiny-to-full.patch" "${OPENWRT_ROOT}/feeds/packages/utils/nano/Makefile"
     infoText "Updating DAWN from git repo" ${INFO_TEXT_MISC}
     pushd "${DAWN_ROOT}"
     git pull
@@ -156,7 +161,7 @@ then
     fi
     cp -arp "${CONFIG_DIRECTORY}/files" "${OPENWRT_ROOT}/files"
     infoText "Creating Full Config and Final Checks" ${INFO_TEXT_MISC}
-    make defconfig
+#    make defconfig
 fi
 #Always give the option to make last minute changes
 make menuconfig
@@ -172,7 +177,7 @@ then
 fi
 
 infoText "Compiling Image" ${INFO_TEXT_MISC}
-make -j$(($(nproc)+2)) world
+make -j$(($(nproc)+2)) world |& tee "${BUILD_LOG_FILE}"
 retVal=$?
 if [ "${retVal}" == "0" ]
 then

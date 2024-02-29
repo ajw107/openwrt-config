@@ -11,10 +11,14 @@ declare -r UPLOADED_FIRMWARE_FILENAME="/tmp/sysupgrade.bin"
 declare -r -i ERROR_NO_TARGET_SUPPLIED=101
 declare -r -i ERROR_MULTIPLE_FIRMWARES_FOUND=102
 declare -r PROG_NAME="uploadFirmware"
-declare -r PROG_VER="1.0"
+declare -r PROG_VER="1.1"
 declare -r AUTHOR="Alex Wood"
 declare -r AUTHOR_EMAIL="alex@alex-wood.org.uk"
 declare _PRINT_HELP=no
+
+#Changelog
+# 1.0 - initial version
+# 1.1 - Add --Force to sysupgrade to make it upgrade as the image checks will always fail with a homemade firmware
 
 #
 # This is a positional arguments-only example of Argbash potential
@@ -71,7 +75,7 @@ infoText "Uploading firmware" ${INFO_TEXT_MISC}
 echo -e "yes\n" | scp "${firmwareFile}" "${IP}:${UPLOADED_FIRMWARE_FILENAME}"
 #${SCP} "${firmwareFile}" "${IP}:${UPLOADED_FIRMWARE_FILENAME}"
 infoText "firmware" ${INFO_TEXT_APPLY}
-ssh "${IP}" "sysupgrade -n ${UPLOADED_FIRMWARE_FILENAME}"
+ssh "${IP}" "sysupgrade --force -n ${UPLOADED_FIRMWARE_FILENAME}"
 #${SSH} "${IP}" "sysupgrade -n -F ${UPLOADED_FIRMWARE_FILENAME}"
 warnText "Please wait a few minutes for the firmware to update, then goto ${IP} in your browser and load Network->Wireless after login"
 

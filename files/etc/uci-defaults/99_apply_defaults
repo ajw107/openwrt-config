@@ -12,6 +12,8 @@ PROG_VER="1.2"
 #               -   Indented the output to make it more readable
 #2024-02-28 1.2 -   Removed Dropbear config, as using openssh now to relieve headaches
 #                   NOTE: /etc/dropbear/authorized_keys no longer required /root/.ssh/authorized_keys used instead
+#2024-02-29 1.2.1 - Need to change premissions for /root/.ssh direcotry (and /root too).  Also forgot to remove
+#                   watchcat's periodic reboot (only do it when internet is lost)
 
 #If compiling your own image place:
 # authorized_keys file of public keys in: <directory where git repo was cloned>/files/root/.ssh/authorized_keys
@@ -584,7 +586,8 @@ setup_watchcat()
     echo -e "Setting up WatchCat..."
 
     #remove default config
-    #DON'T THINK THIS WORKING FO SOME REASON
+    #DON'T THINK THIS WORKING FOR SOME REASON
+    #AS OLD CONFIG REMAINS, SO LOTS OF DUPLICATES
     uci_remove_array "system" "=watchcat$"
 
     #if there's no internet (ping google.com) for 5m, reboot
@@ -598,10 +601,11 @@ setup_watchcat()
     uci set system.@watchcat[-1].interface='br-lan'
 
     #every 12 hours reboot (for some reason, after a while wifi is still active, but devices can't use internet)
-    uci -q add system watchcat >/dev/null
-    uci set system.@watchcat[-1].mode='periodic_reboot'
-    uci set system.@watchcat[-1].period='12h'
-    uci set system.@watchcat[-1].forcedelay='0'
+    #1.2.1 No need for this anymore, and it;s annoying when it happens
+#    uci -q add system watchcat >/dev/null
+#    uci set system.@watchcat[-1].mode='periodic_reboot'
+#    uci set system.@watchcat[-1].period='12h'
+#    uci set system.@watchcat[-1].forcedelay='0'
 
     uci commit system
     echo -e "WatchCat setup complete"
@@ -640,6 +644,12 @@ setup_final()
 {
     echo -e "Final setup..."
     #echo -e "192.168.16.22 dashboard.alex-wood.org.uk controller.alex-wood.org.uk radius.alex-wood.org.uk topology.alex-wood.org.uk" | tee -a /etc/hosts
+
+    #1.2.1 Need to change permissions of /root and /root.ssh to allow openssh to work
+    chmod 755 /root #shocked this was not tjis by default
+    chmod 700 /root/.ssh
+    chmod 600 /root/.ssh/*.* #config, authorized_keys, known_hosts  and private keys
+    chmod 644 /root/.ssh/*.pub  #change back public key to world READable
 
     sed -i '10a\export TERM=xterm-color' "/etc/profile"
 
